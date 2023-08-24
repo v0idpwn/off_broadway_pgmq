@@ -5,6 +5,8 @@ defmodule OffBroadwayPgmq do
   The producer receives 4 options:
   - `:repo`: the ecto repo to be used, mandatory.
   - `:queue`: the queue name to be used, mandatory.
+  - `:visibility_timeout`: the time the messages will be unavailable in the queue
+  after being read. Required
   - `:max_poll_seconds`: how long the maximum poll request takes, optional, defaults
   to 5 seconds.
   - `:attempt_interval_ms`: interval in ms to wait before doing poll requests in
@@ -29,13 +31,16 @@ defmodule OffBroadwayPgmq do
   @default_attempt_interval_ms 500
 
   alias Broadway.Producer
+  alias Broadway.Acknowledger
 
   @behaviour Producer
+  @behaviour Acknowledger
 
-  @impl true
+  @impl GenStage
   def init(opts) do
     repo = Keyword.fetch!(opts, :repo)
     queue = Keyword.fetch!(opts, :queue)
+    visibility_timeout = Keyword.fetch!(opts, :visibility_timeout)
     max_poll_seconds = Keyword.get(opts, :max_poll_seconds, @default_max_poll_seconds)
     poll_interval_ms = Keyword.get(opts, :db_poll_interval_ms, @default_pgmq_poll_interval_ms)
     attempt_interval_ms = Keyword.get(opts, :attempt_interval_ms, @default_attempt_interval_ms)
@@ -45,6 +50,7 @@ defmodule OffBroadwayPgmq do
        demand: 0,
        receive_timer: nil,
        receive_interval: attempt_interval_ms,
+       visibility_timeout: visibility_timeout,
        repo: repo,
        queue: queue,
        max_poll_seconds: max_poll_seconds,
@@ -52,22 +58,22 @@ defmodule OffBroadwayPgmq do
      }}
   end
 
-  @impl true
+  @impl GenStage
   def handle_demand(incoming_demand, %{demand: demand} = state) do
     handle_receive_messages(%{state | demand: demand + incoming_demand})
   end
 
-  @impl true
+  @impl GenStage
   def handle_info(:receive_messages, %{receive_timer: nil} = state) do
     {:noreply, [], state}
   end
 
-  @impl true
+  @impl GenStage
   def handle_info(:receive_messages, state) do
     handle_receive_messages(%{state | receive_timer: nil})
   end
 
-  @impl true
+  @impl GenStage
   def handle_info(_, state) do
     {:noreply, [], state}
   end
@@ -78,13 +84,20 @@ defmodule OffBroadwayPgmq do
     {:noreply, [], %{state | receive_timer: nil}}
   end
 
+  @impl Acknowledger
+  def ack({queue_name, repo}, successful, failed) do
+    :ok = Pgmq.delete_messages(repo, queue_name, Enum.map(successful, fn m -> m.data end))
+    IO.inspect(failed)
+    :ok
+  end
+
   defp handle_receive_messages(%{receive_timer: nil, demand: demand} = state) when demand > 0 do
     messages = receive_messages(state, demand)
     new_demand = demand - length(messages)
 
     receive_timer =
       case {messages, new_demand} do
-        {[], _} -> schedule_receive_messages(state.attempt_interval_ms)
+        {[], _} -> schedule_receive_messages(state.receive_interval)
         {_, 0} -> nil
         _ -> schedule_receive_messages(0)
       end
@@ -102,14 +115,17 @@ defmodule OffBroadwayPgmq do
       %{},
       fn ->
         messages =
-          Pgmq.read_messages_with_poll(
-            s.repo,
+          s.repo
+          |> Pgmq.read_messages_with_poll(
             s.queue,
             s.visibility_timeout,
             total_demand,
             s.max_poll_seconds,
             s.poll_interval_ms
           )
+          |> Enum.map(fn message ->
+            %Broadway.Message{data: message, acknowledger: {__MODULE__, {s.queue, s.repo}, []}}
+          end)
 
         {messages, %{messages: messages}}
       end
