@@ -85,10 +85,13 @@ defmodule OffBroadwayPgmq do
   end
 
   @impl Acknowledger
-  def ack({queue_name, repo}, successful, failed) do
+  def ack({queue_name, repo, max_fails}, successful, failed) do
     :ok = Pgmq.delete_messages(repo, queue_name, Enum.map(successful, fn m -> m.data end))
-    IO.inspect(failed)
-    :ok
+    Enum.each(failed, fn m ->
+      if m.data.read_count >= max_fails do
+        Pgmq.archive_message(repo, queue_name, m.data.id)
+      end
+    end)
   end
 
   defp handle_receive_messages(%{receive_timer: nil, demand: demand} = state) when demand > 0 do
