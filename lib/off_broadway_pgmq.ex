@@ -44,6 +44,7 @@ defmodule OffBroadwayPgmq do
     max_poll_seconds = Keyword.get(opts, :max_poll_seconds, @default_max_poll_seconds)
     poll_interval_ms = Keyword.get(opts, :db_poll_interval_ms, @default_pgmq_poll_interval_ms)
     attempt_interval_ms = Keyword.get(opts, :attempt_interval_ms, @default_attempt_interval_ms)
+    maximum_failures = Keyword.get(opts, :maximum_failures, 10)
 
     {:producer,
      %{
@@ -54,7 +55,8 @@ defmodule OffBroadwayPgmq do
        repo: repo,
        queue: queue,
        max_poll_seconds: max_poll_seconds,
-       poll_interval_ms: poll_interval_ms
+       poll_interval_ms: poll_interval_ms,
+       maximum_failures: maximum_failures
      }}
   end
 
@@ -127,7 +129,7 @@ defmodule OffBroadwayPgmq do
             s.poll_interval_ms
           )
           |> Enum.map(fn message ->
-            %Broadway.Message{data: message, acknowledger: {__MODULE__, {s.queue, s.repo}, []}}
+            %Broadway.Message{data: message, acknowledger: {__MODULE__, {s.queue, s.repo, s.maximum_failures}, []}}
           end)
 
         {messages, %{messages: messages}}
