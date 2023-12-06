@@ -21,7 +21,7 @@ defmodule OffBroadwayPgmq.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:pgmq, path: "../pgmq"},
+      {:pgmq, "~> 0.2.0"},
       {:broadway, "~> 1.0"}
     ]
   end

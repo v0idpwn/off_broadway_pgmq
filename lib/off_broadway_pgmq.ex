@@ -89,6 +89,7 @@ defmodule OffBroadwayPgmq do
   @impl Acknowledger
   def ack({queue_name, repo, max_fails}, successful, failed) do
     :ok = Pgmq.delete_messages(repo, queue_name, Enum.map(successful, fn m -> m.data end))
+
     Enum.each(failed, fn m ->
       if m.data.read_count >= max_fails do
         Pgmq.archive_message(repo, queue_name, m.data.id)
@@ -129,7 +130,10 @@ defmodule OffBroadwayPgmq do
             s.poll_interval_ms
           )
           |> Enum.map(fn message ->
-            %Broadway.Message{data: message, acknowledger: {__MODULE__, {s.queue, s.repo, s.maximum_failures}, []}}
+            %Broadway.Message{
+              data: message,
+              acknowledger: {__MODULE__, {s.queue, s.repo, s.maximum_failures}, []}
+            }
           end)
 
         {messages, %{messages: messages}}
