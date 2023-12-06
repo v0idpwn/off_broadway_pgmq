@@ -1,13 +1,20 @@
 defmodule OffBroadwayPgmq.MixProject do
   use Mix.Project
 
+  @version "0.1.0"
+
   def project do
     [
       app: :off_broadway_pgmq,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      package: package(),
+      docs: docs(),
+      description: description(),
+      name: "OffBroadwayPgmq",
+      source_url: "https://github.com/v0idpwn/off_broadway_pgmq"
     ]
   end
 
@@ -22,7 +29,26 @@ defmodule OffBroadwayPgmq.MixProject do
   defp deps do
     [
       {:pgmq, "~> 0.2.0"},
-      {:broadway, "~> 1.0"}
+      {:broadway, "~> 1.0"},
+      {:ex_doc, ">= 0.0.0", runtime: false, only: :dev}
     ]
   end
+
+  defp package do
+    [
+      name: "off_broadway_pgmq",
+      files: ~w(lib .formatter.exs mix.exs README.md),
+      licenses: ["Apache-2.0"],
+      links: %{"GitHub" => "https://github.com/v0idpwn/off_broadway_pgmq"}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "OffBroadwayPgmq",
+      source_ref: "v#{@version}"
+    ]
+  end
+
+  defp description, do: "Broadway producer for PGMQ"
 end
