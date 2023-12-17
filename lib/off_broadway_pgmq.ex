@@ -4,6 +4,7 @@ defmodule OffBroadwayPgmq do
 
   The producer receives 4 options:
   - `:repo`: the ecto repo to be used, mandatory.
+  - `:dynamic_repo`: dynamic repo to be used, optional.
   - `:queue`: the queue name to be used, mandatory.
   - `:visibility_timeout`: the time the messages will be unavailable in the queue
   after being read. Required
@@ -45,6 +46,11 @@ defmodule OffBroadwayPgmq do
     poll_interval_ms = Keyword.get(opts, :db_poll_interval_ms, @default_pgmq_poll_interval_ms)
     attempt_interval_ms = Keyword.get(opts, :attempt_interval_ms, @default_attempt_interval_ms)
     maximum_failures = Keyword.get(opts, :maximum_failures, 10)
+    dynamic_repo = Keyword.get(opts, :dynamic_repo)
+
+    if dynamic_repo do
+      repo.put_dynamic_repo(dynamic_repo)
+    end
 
     {:producer,
      %{
@@ -53,6 +59,7 @@ defmodule OffBroadwayPgmq do
        receive_interval: attempt_interval_ms,
        visibility_timeout: visibility_timeout,
        repo: repo,
+       dynamic_repo: dynamic_repo,
        queue: queue,
        max_poll_seconds: max_poll_seconds,
        poll_interval_ms: poll_interval_ms,
@@ -87,7 +94,7 @@ defmodule OffBroadwayPgmq do
   end
 
   @impl Acknowledger
-  def ack({queue_name, repo, max_fails}, successful, failed) do
+  def ack({queue_name, repo, dyn_repo, max_fails}, successful, failed) do
     :ok = Pgmq.delete_messages(repo, queue_name, Enum.map(successful, fn m -> m.data end))
 
     messages_to_archive =
@@ -98,6 +105,10 @@ defmodule OffBroadwayPgmq do
           []
         end
       end)
+
+    if dyn_repo do
+      repo.put_dynamic_repo(dyn_repo)
+    end
 
     Pgmq.archive_messages(repo, queue_name, messages_to_archive)
   end
@@ -137,7 +148,8 @@ defmodule OffBroadwayPgmq do
           |> Enum.map(fn message ->
             %Broadway.Message{
               data: message,
-              acknowledger: {__MODULE__, {s.queue, s.repo, s.maximum_failures}, []}
+              acknowledger:
+                {__MODULE__, {s.queue, s.repo, s.dynamic_repo, s.maximum_failures}, []}
             }
           end)
 
