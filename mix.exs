@@ -1,7 +1,7 @@
 defmodule OffBroadwayPgmq.MixProject do
   use Mix.Project
 
-  @version "0.2.1"
+  @version "0.2.2"
 
   def project do
     [
@@ -28,7 +28,7 @@ defmodule OffBroadwayPgmq.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:pgmq, "~> 0.2.0"},
+      {:pgmq, "~> 0.2"},
       {:broadway, "~> 1.0"},
       {:ex_doc, ">= 0.0.0", runtime: false, only: :dev}
     ]
