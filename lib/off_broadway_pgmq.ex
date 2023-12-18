@@ -95,6 +95,10 @@ defmodule OffBroadwayPgmq do
 
   @impl Acknowledger
   def ack({queue_name, repo, dyn_repo, max_fails}, successful, failed) do
+    if dyn_repo do
+      repo.put_dynamic_repo(dyn_repo)
+    end
+
     :ok = Pgmq.delete_messages(repo, queue_name, Enum.map(successful, fn m -> m.data end))
 
     messages_to_archive =
@@ -105,10 +109,6 @@ defmodule OffBroadwayPgmq do
           []
         end
       end)
-
-    if dyn_repo do
-      repo.put_dynamic_repo(dyn_repo)
-    end
 
     Pgmq.archive_messages(repo, queue_name, messages_to_archive)
   end
